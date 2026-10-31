@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sistem Manajemen Keuangan Tabungan Siswa</title>
+  
+  <!-- CDN Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- CDN FontAwesome 6 Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  
+  <!-- Google Fonts: Plus Jakarta Sans & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    @media print {
+      body * { visibility: hidden; }
+      #print-area, #print-area * { visibility: visible; }
+      #print-area {
+        position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 24px; background: white;
+      }
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans min-h-screen flex flex-col">
+
+  <!-- ================= TOP BAR ================= -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-30">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16 gap-4">
+        
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-emerald-600 flex items-center justify-center text-white shadow-sm font-bold text-lg">
+            <i class="fa-solid fa-vault"></i>
+          </div>
+          <div>
+            <span class="font-bold text-slate-900 text-lg tracking-tight block leading-tight">Tabungan Siswa</span>
+            <span class="text-xs text-slate-500 font-medium">Sistem Keuangan Terintegrasi Google Sheets</span>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2 sm:gap-3">
+          <div id="connection-status-badge" class="px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+            <span id="connection-status-text">Mode Simulasi Lokal</span>
+          </div>
+
+          <button onclick="fetchDataFromBackend()" title="Sinkronkan Data" class="p-2 text-slate-600 hover:text-emerald-600 hover:bg-slate-100 rounded-lg transition">
+            <i id="sync-icon" class="fa-solid fa-arrows-rotate"></i>
+          </button>
+
+          <button onclick="openModal('modal-transaction')" class="px-3.5 py-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition flex items-center gap-2">
+            <i class="fa-solid fa-plus text-xs"></i>
+            <span class="hidden sm:inline">Transaksi Baru</span>
+          </button>
+        </div>
+
+      </div>
+    </div>
+  </header>
+
+  <!-- ================= MAIN CONTENT ================= -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+    <!-- Banner Info Sambungan GAS -->
+    <div id="gas-notice" class="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 text-sm text-emerald-900">
+      <div class="flex items-start gap-3">
+        <i class="fa-solid fa-circle-info text-emerald-600 mt-0.5 text-base"></i>
+        <div>
+          <strong class="font-semibold">Sambungkan ke Google Spreadsheet Anda:</strong>
+          <span class="text-emerald-800 ml-1">Deploy skrip <code class="bg-emerald-100 px-1.5 py-0.5 rounded font-mono text-xs">Code.gs</code> di Apps Script, lalu masukkan URL Web App untuk sinkronisasi live.</span>
+        </div>
+      </div>
+      <button onclick="setActiveTab('settings')" class="px-3 py-1.5 text-xs font-medium text-emerald-700 bg-white border border-emerald-300 rounded-lg hover:bg-emerald-100 transition whitespace-nowrap">
+        <i class="fa-solid fa-gear mr-1"></i> Atur URL Web App
+      </button>
+    </div>
+
+    <!-- ================= 1. RINGKASAN DASHBOARD (KPI STATS) ================= -->
+    <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+        <div class="space-y-1">
+          <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Total Saldo Siswa</p>
+          <h3 id="stat-total-saldo" class="text-2xl font-bold text-slate-900 font-mono tabular-nums">Rp 0</h3>
+          <p class="text-xs text-slate-400">Total dana di kas</p>
+        </div>
+        <div class="w-12 h-12 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl">
+          <i class="fa-solid fa-wallet"></i>
+        </div>
+      </div>
+
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+        <div class="space-y-1">
+          <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Total Setoran</p>
+          <h3 id="stat-total-setor" class="text-2xl font-bold text-emerald-600 font-mono tabular-nums">Rp 0</h3>
+          <p class="text-xs text-slate-400">Uang masuk akumulatif</p>
+        </div>
+        <div class="w-12 h-12 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl">
+          <i class="fa-solid fa-arrow-down-left"></i>
+        </div>
+      </div>
+
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+        <div class="space-y-1">
+          <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Total Penarikan</p>
+          <h3 id="stat-total-tarik" class="text-2xl font-bold text-rose-600 font-mono tabular-nums">Rp 0</h3>
+          <p class="text-xs text-slate-400">Uang keluar akumulatif</p>
+        </div>
+        <div class="w-12 h-12 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center text-xl">
+          <i class="fa-solid fa-arrow-up-right"></i>
+        </div>
+      </div>
+
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+        <div class="space-y-1">
+          <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Total Siswa</p>
+          <h3 id="stat-total-siswa" class="text-2xl font-bold text-slate-900 font-mono tabular-nums">0 Siswa</h3>
+          <p class="text-xs text-slate-400" id="stat-total-trx">0 Transaksi</p>
+        </div>
+        <div class="w-12 h-12 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center text-xl">
+          <i class="fa-solid fa-user-graduate"></i>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= TABS ================= -->
+    <div class="flex items-center gap-1 border-b border-slate-200 pb-2 overflow-x-auto text-sm">
+      <button onclick="setActiveTab('transaksi')" id="tab-btn-transaksi" class="tab-btn px-4 py-2 font-medium rounded-lg text-emerald-700 bg-emerald-50 whitespace-nowrap transition">
+        <i class="fa-solid fa-receipt mr-1.5"></i> Riwayat Transaksi
+      </button>
+      <button onclick="setActiveTab('siswa')" id="tab-btn-siswa" class="tab-btn px-4 py-2 font-medium rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 whitespace-nowrap transition">
+        <i class="fa-solid fa-users mr-1.5"></i> Data Siswa &amp; Saldo
+      </button>
+      <button onclick="setActiveTab('form-transaksi')" id="tab-btn-form-transaksi" class="tab-btn px-4 py-2 font-medium rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 whitespace-nowrap transition">
+        <i class="fa-solid fa-money-bill-transfer mr-1.5"></i> Form Setor &amp; Tarik
+      </button>
+      <button onclick="setActiveTab('settings')" id="tab-btn-settings" class="tab-btn px-4 py-2 font-medium rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 whitespace-nowrap transition">
+        <i class="fa-solid fa-plug-circle-check mr-1.5"></i> Integrasi Google Sheets
+      </button>
+    </div>
+
+    <!-- TAB 1: RIWAYAT TRANSAKSI -->
+    <div id="tab-content-transaksi" class="tab-pane space-y-4">
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 sm:p-5">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
+          <div class="relative flex-1 max-w-md">
+            <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+            <input type="text" id="trx-search-input" oninput="renderTransactionsTable()" placeholder="Cari NISN, nama siswa, ID transaksi..." class="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500">
+          </div>
+          <div class="flex items-center gap-2 flex-wrap">
+            <select id="trx-filter-type" onchange="renderTransactionsTable()" class="px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white">
+              <option value="ALL">Semua Jenis (Setor &amp; Tarik)</option>
+              <option value="SETOR">Hanya Setor</option>
+              <option value="TARIK">Hanya Tarik</option>
+            </select>
+            <button onclick="exportTransactionsCSV()" class="px-3 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition flex items-center gap-1.5">
+              <i class="fa-solid fa-file-csv"></i> Unduh CSV
+            </button>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm border-collapse">
+            <thead>
+              <tr class="border-b border-slate-200 text-slate-500 text-xs font-semibold uppercase bg-slate-50">
+                <th class="py-3 px-3">ID &amp; Tanggal</th>
+                <th class="py-3 px-3">Siswa (NISN / Nama)</th>
+                <th class="py-3 px-3">Kelas</th>
+                <th class="py-3 px-3">Jenis</th>
+                <th class="py-3 px-3 text-right">Nominal</th>
+                <th class="py-3 px-3">Keterangan</th>
+                <th class="py-3 px-3 text-center">Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="trx-table-body" class="divide-y divide-slate-100"></tbody>
+          </table>
+        </div>
+        <div id="trx-empty-state" class="hidden text-center py-12 text-slate-400 text-sm">Belum ada riwayat transaksi yang cocok.</div>
+      </div>
+    </div>
+
+    <!-- TAB 2: DATA SISWA -->
+    <div id="tab-content-siswa" class="tab-pane hidden space-y-4">
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 sm:p-5">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
+          <div class="flex items-center gap-3 flex-1 max-w-md">
+            <div class="relative w-full">
+              <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+              <input type="text" id="siswa-search-input" oninput="renderSiswaTable()" placeholder="Cari NISN atau nama siswa..." class="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500">
+            </div>
+            <select id="siswa-class-filter" onchange="renderSiswaTable()" class="px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white">
+              <option value="ALL">Semua Kelas</option>
+            </select>
+          </div>
+          <button onclick="openModal('modal-add-student')" class="px-4 py-2 text-sm font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg shadow-sm transition flex items-center gap-2">
+            <i class="fa-solid fa-user-plus text-xs"></i>
+            <span>Tambah Siswa Baru</span>
+          </button>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm border-collapse">
+            <thead>
+              <tr class="border-b border-slate-200 text-slate-500 text-xs font-semibold uppercase bg-slate-50">
+                <th class="py-3 px-3">NISN</th>
+                <th class="py-3 px-3">Nama Lengkap</th>
+                <th class="py-3 px-3">Kelas</th>
+                <th class="py-3 px-3 text-right">Saldo Tabungan</th>
+                <th class="py-3 px-3">Terakhir Update</th>
+                <th class="py-3 px-3 text-center">Tindakan</th>
+              </tr>
+            </thead>
+            <tbody id="siswa-table-body" class="divide-y divide-slate-100"></tbody>
+          </table>
+        </div>
+        <div id="siswa-empty-state" class="hidden text-center py-12 text-slate-400 text-sm">Data siswa tidak ditemukan.</div>
+      </div>
+    </div>
+
+    <!-- TAB 3: FORM SETOR & TARIK -->
+    <div id="tab-content-form-transaksi" class="tab-pane hidden max-w-2xl mx-auto">
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-6">
+        <div class="border-b border-slate-100 pb-3">
+          <h2 class="text-lg font-bold text-slate-900">Form Transaksi Kas Tabungan</h2>
+          <p class="text-xs text-slate-500">Pilih siswa, jenis mutasi kas, dan nominal uang.</p>
+        </div>
+
+        <form id="main-tx-form" onsubmit="submitTransactionForm(event)" class="space-y-5">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 uppercase mb-2">Jenis Transaksi</label>
+            <div class="grid grid-cols-2 gap-3">
+              <label class="cursor-pointer border-2 rounded-xl p-3 flex items-center justify-center gap-2 transition" id="tx-type-setor-label">
+                <input type="radio" name="tx-type" value="SETOR" checked onchange="updateTxTypeStyle()" class="sr-only">
+                <i class="fa-solid fa-arrow-down-left text-emerald-600"></i>
+                <span class="font-semibold text-slate-900">Setor Tunai</span>
+              </label>
+              <label class="cursor-pointer border-2 rounded-xl p-3 flex items-center justify-center gap-2 transition" id="tx-type-tarik-label">
+                <input type="radio" name="tx-type" value="TARIK" onchange="updateTxTypeStyle()" class="sr-only">
+                <i class="fa-solid fa-arrow-up-right text-rose-600"></i>
+                <span class="font-semibold text-slate-900">Tarik Tunai</span>
+              </label>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Pilih Siswa</label>
+            <select id="tx-student-select" onchange="onStudentSelectChanged()" required class="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 bg-white">
+              <option value="">-- Pilih Siswa --</option>
+            </select>
+          </div>
+
+          <div id="tx-student-balance-card" class="hidden bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs text-slate-600 space-y-1">
+            <div class="flex justify-between"><span>Nama Siswa:</span><strong id="tx-selected-name" class="text-slate-900">-</strong></div>
+            <div class="flex justify-between"><span>Kelas:</span><strong id="tx-selected-class" class="text-slate-900">-</strong></div>
+            <div class="flex justify-between text-sm pt-1 border-t border-slate-200">
+              <span class="font-medium text-slate-700">Saldo Saat Ini:</span>
+              <strong id="tx-selected-balance" class="text-emerald-700 font-mono">Rp 0</strong>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Nominal Transaksi (Rp)</label>
+            <input type="number" id="tx-amount" min="1000" step="500" required placeholder="Contoh: 50000" oninput="calculateProjectedBalance()" class="w-full px-3 py-2.5 text-base font-mono border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500">
+            <div class="flex items-center gap-2 mt-2 flex-wrap">
+              <button type="button" onclick="setNominal(10000)" class="px-2.5 py-1 text-xs font-medium bg-slate-100 hover:bg-slate-200 rounded-md text-slate-700">+10.000</button>
+              <button type="button" onclick="setNominal(20000)" class="px-2.5 py-1 text-xs font-medium bg-slate-100 hover:bg-slate-200 rounded-md text-slate-700">+20.000</button>
+              <button type="button" onclick="setNominal(50000)" class="px-2.5 py-1 text-xs font-medium bg-slate-100 hover:bg-slate-200 rounded-md text-slate-700">+50.000</button>
+              <button type="button" onclick="setNominal(100000)" class="px-2.5 py-1 text-xs font-medium bg-slate-100 hover:bg-slate-200 rounded-md text-slate-700">+100.000</button>
+            </div>
+          </div>
+
+          <div id="tx-projected-container" class="hidden p-3 rounded-lg border border-emerald-100 bg-emerald-50 text-xs flex justify-between items-center">
+            <span class="text-emerald-800">Estimasi Saldo Setelah Transaksi:</span>
+            <strong id="tx-projected-balance" class="text-sm font-mono text-emerald-900">Rp 0</strong>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Keterangan</label>
+              <input type="text" id="tx-note" placeholder="Contoh: Tabungan mingguan" class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Nama Petugas</label>
+              <input type="text" id="tx-officer" value="Admin Sekolah" class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500">
+            </div>
+          </div>
+
+          <button type="submit" id="tx-submit-btn" class="w-full py-3 px-4 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-md transition flex items-center justify-center gap-2">
+            <i class="fa-solid fa-paper-plane"></i>
+            <span>Simpan &amp; Proses Transaksi</span>
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- TAB 4: INTEGRASI GOOGLE SHEETS -->
+    <div id="tab-content-settings" class="tab-pane hidden max-w-3xl mx-auto space-y-6">
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-5">
+        <div>
+          <h2 class="text-lg font-bold text-slate-900">Konfigurasi Google Apps Script (Web App URL)</h2>
+          <p class="text-xs text-slate-500">Hubungkan frontend ini ke Google Spreadsheet Anda secara live.</p>
+        </div>
+
+        <div class="space-y-3">
+          <label class="block text-xs font-semibold text-slate-700 uppercase">Web App URL Endpoint</label>
+          <input type="url" id="gas-url-input" placeholder="https://script.google.com/macros/s/AKfycb.../exec" class="w-full px-3.5 py-2.5 text-sm font-mono border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500">
+        </div>
+
+        <div class="flex items-center gap-3 pt-2">
+          <button onclick="saveGasUrl()" class="px-4 py-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition">
+            <i class="fa-solid fa-floppy-disk mr-1.5"></i> Simpan &amp; Uji Koneksi
+          </button>
+          <button onclick="resetToLocalDemo()" class="px-3.5 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition border border-slate-200">
+            Mode Offline
+          </button>
+        </div>
+
+        <div id="gas-test-result" class="hidden p-4 rounded-xl text-xs space-y-1"></div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- MODAL TRANSAKSI CEPAT -->
+  <div id="modal-transaction" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <h3 class="font-bold text-slate-900 text-base">Transaksi Tabungan</h3>
+        <button onclick="closeModal('modal-transaction')" class="text-slate-400 hover:text-slate-600 text-lg">&times;</button>
+      </div>
+      <form onsubmit="submitModalTransaction(event)" class="space-y-4 text-sm">
+        <div>
+          <label class="block text-xs font-semibold mb-1">Pilih Siswa</label>
+          <select id="modal-tx-student" onchange="onModalStudentChange()" required class="w-full px-3 py-2 border rounded-lg bg-white"></select>
+          <p id="modal-tx-balance-display" class="text-xs text-slate-500 mt-1 font-mono"></p>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <label class="border rounded-lg p-2 flex items-center justify-center gap-2 cursor-pointer has-[:checked]:border-emerald-600 has-[:checked]:bg-emerald-50">
+            <input type="radio" name="modal-tx-type" value="SETOR" checked class="text-emerald-600">
+            <span class="font-semibold text-xs">Setor Tunai</span>
+          </label>
+          <label class="border rounded-lg p-2 flex items-center justify-center gap-2 cursor-pointer has-[:checked]:border-rose-600 has-[:checked]:bg-rose-50">
+            <input type="radio" name="modal-tx-type" value="TARIK" class="text-rose-600">
+            <span class="font-semibold text-xs">Tarik Tunai</span>
+          </label>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1">Nominal (Rp)</label>
+          <input type="number" id="modal-tx-amount" min="1000" step="500" required placeholder="Contoh: 25000" class="w-full px-3 py-2 border rounded-lg font-mono">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1">Keterangan</label>
+          <input type="text" id="modal-tx-note" placeholder="Contoh: Tabungan mingguan" class="w-full px-3 py-2 border rounded-lg">
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" onclick="closeModal('modal-transaction')" class="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg">Batal</button>
+          <button type="submit" id="modal-tx-submit" class="px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm">Simpan Transaksi</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL TAMBAH SISWA -->
+  <div id="modal-add-student" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <h3 class="font-bold text-slate-900 text-base">Pendaftaran Siswa Baru</h3>
+        <button onclick="closeModal('modal-add-student')" class="text-slate-400 hover:text-slate-600 text-lg">&times;</button>
+      </div>
+      <form onsubmit="submitAddStudent(event)" class="space-y-4 text-sm">
+        <div>
+          <label class="block text-xs font-semibold mb-1">NISN (10 Digit)</label>
+          <input type="text" id="new-student-nisn" required placeholder="0081234567" class="w-full px-3 py-2 border rounded-lg font-mono">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1">Nama Lengkap</label>
+          <input type="text" id="new-student-nama" required placeholder="Contoh: Muhammad Farhan" class="w-full px-3 py-2 border rounded-lg">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1">Kelas</label>
+          <input type="text" id="new-student-kelas" required placeholder="Contoh: VII-A" class="w-full px-3 py-2 border rounded-lg">
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" onclick="closeModal('modal-add-student')" class="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg">Batal</button>
+          <button type="submit" id="new-student-submit" class="px-4 py-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-lg">Daftarkan</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL CETAK KUITANSI -->
+  <div id="modal-receipt" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+      <div id="print-area" class="border border-slate-200 rounded-xl p-5 bg-white space-y-3 text-xs">
+        <div class="text-center border-b border-dashed border-slate-300 pb-3">
+          <h4 class="font-bold text-base text-slate-900 uppercase">KUITANSI TABUNGAN SISWA</h4>
+          <p class="text-slate-500 text-[11px]">Madrasah / Lembaga Pendidikan</p>
+        </div>
+        <div class="space-y-1.5 py-1">
+          <div class="flex justify-between"><span class="text-slate-500">No. Transaksi:</span><span id="rcp-id" class="font-mono font-bold text-slate-800"></span></div>
+          <div class="flex justify-between"><span class="text-slate-500">Waktu:</span><span id="rcp-time" class="text-slate-800"></span></div>
+          <div class="flex justify-between"><span class="text-slate-500">NISN / Nama:</span><span id="rcp-student" class="font-bold text-slate-900 text-right"></span></div>
+          <div class="flex justify-between"><span class="text-slate-500">Kelas:</span><span id="rcp-class" class="text-slate-800"></span></div>
+          <div class="flex justify-between border-t pt-1.5"><span class="text-slate-500">Jenis:</span><span id="rcp-type" class="font-bold"></span></div>
+          <div class="flex justify-between text-sm py-1 font-bold"><span class="text-slate-800">Nominal:</span><span id="rcp-amount" class="font-mono text-emerald-700"></span></div>
+          <div class="flex justify-between"><span class="text-slate-500">Keterangan:</span><span id="rcp-note" class="text-slate-800"></span></div>
+          <div class="flex justify-between"><span class="text-slate-500">Petugas:</span><span id="rcp-officer" class="text-slate-800"></span></div>
+        </div>
+      </div>
+      <div class="flex justify-end gap-2 pt-2">
+        <button onclick="closeModal('modal-receipt')" class="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg">Tutup</button>
+        <button onclick="window.print()" class="px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm flex items-center gap-1.5">
+          <i class="fa-solid fa-print"></i> Cetak / PDF
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="fixed bottom-5 right-5 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-lg text-sm font-medium text-white bg-slate-900">
+    <i id="toast-icon" class="fa-solid fa-circle-check text-emerald-400"></i>
+    <span id="toast-message">Operasi berhasil</span>
+  </div>
+
+  <!-- JAVASCRIPT ENGINE -->
+  <script>
+    const CONFIG = {
+      gasEndpointKey: 'TABUNGAN_SISWA_GAS_URL'
+    };
+
+    let appState = {
+      gasUrl: localStorage.getItem(CONFIG.gasEndpointKey) || '',
+      summary: { totalSaldo: 0, totalSetoran: 0, totalPenarikan: 0, totalSiswa: 0, totalTransaksi: 0 },
+      siswa: [],
+      transaksi: [],
+      isLoading: false
+    };
+
+    const MOCK_DATA = {
+      siswa: [
+        { nisn: '0081234561', nama: 'Ahmad Fauzan Pratama', kelas: 'VII-A', saldo: 150000, terakhirUpdate: '2026-10-30 08:30:00' },
+        { nisn: '0081234562', nama: 'Siti Nurhaliza Putri', kelas: 'VII-A', saldo: 275000, terakhirUpdate: '2026-10-30 09:15:00' },
+        { nisn: '0081234563', nama: 'Budi Santoso', kelas: 'VII-B', saldo: 90000, terakhirUpdate: '2026-10-29 11:00:00' },
+      ],
+      transaksi: [
+        { id: 'TRX-20261030-001', tanggal: '2026-10-30 09:15:00', nisn: '0081234562', nama: 'Siti Nurhaliza Putri', kelas: 'VII-A', jenis: 'SETOR', jumlah: 275000, keterangan: 'Setoran rutin', petugas: 'Admin' },
+        { id: 'TRX-20261030-002', tanggal: '2026-10-30 08:30:00', nisn: '0081234561', nama: 'Ahmad Fauzan Pratama', kelas: 'VII-A', jenis: 'SETOR', jumlah: 150000, keterangan: 'Buku tabungan awal', petugas: 'Admin' },
+      ]
+    };
+
+    document.addEventListener('DOMContentLoaded', () => {
+      initApp();
+      updateTxTypeStyle();
+    });
+
+    function initApp() {
+      const stored = localStorage.getItem(CONFIG.gasEndpointKey);
+      if (stored) {
+        appState.gasUrl = stored;
+        document.getElementById('gas-url-input').value = stored;
+        fetchDataFromBackend();
+      } else {
+        loadMockData();
+        updateConnectionBadge(false);
+      }
+    }
+
+    function loadMockData() {
+      appState.siswa = JSON.parse(JSON.stringify(MOCK_DATA.siswa));
+      appState.transaksi = JSON.parse(JSON.stringify(MOCK_DATA.transaksi));
+      calculateSummaryFromLocal();
+      renderAllViews();
+    }
+
+    function calculateSummaryFromLocal() {
+      let totalSaldo = 0;
+      appState.siswa.forEach(s => totalSaldo += (Number(s.saldo) || 0));
+      let totalSetor = 0;
+      let totalTarik = 0;
+      appState.transaksi.forEach(t => {
+        if (t.jenis === 'SETOR') totalSetor += (Number(t.jumlah) || 0);
+        if (t.jenis === 'TARIK') totalTarik += (Number(t.jumlah) || 0);
+      });
+      appState.summary = {
+        totalSaldo,
+        totalSetoran: totalSetor,
+        totalPenarikan: totalTarik,
+        totalSiswa: appState.siswa.length,
+        totalTransaksi: appState.transaksi.length
+      };
+    }
+
+    async function fetchDataFromBackend() {
+      if (!appState.gasUrl) {
+        loadMockData();
+        return;
+      }
+      setLoading(true);
+      try {
+        const response = await fetch(`${appState.gasUrl}?action=getAll`, {
+          method: 'GET',
+          redirect: 'follow',
+        });
+        const result = await response.json();
+        if (result.status === 'success' && result.data) {
+          appState.summary = result.data.summary;
+          appState.siswa = result.data.siswa || [];
+          appState.transaksi = result.data.transaksi || [];
+          updateConnectionBadge(true);
+          renderAllViews();
+          showToast('Data berhasil disinkronkan dari Google Sheets!', 'success');
+        } else {
+          throw new Error(result.message || 'Respon gagal');
+        }
+      } catch (err) {
+        updateConnectionBadge(false, true);
+        showToast(`Gagal sinkron: ${err.message}`, 'error');
+        calculateSummaryFromLocal();
+        renderAllViews();
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    async function sendTransactionToBackend(transactionData) {
+      if (!appState.gasUrl) {
+        return simulateLocalTransaction(transactionData);
+      }
+      // Kirim JSON string plain untuk menghindari kendala CORS preflight OPTIONS di GAS
+      const response = await fetch(appState.gasUrl, {
+        method: 'POST',
+        redirect: 'follow',
+        body: JSON.stringify({
+          action: 'addTransaction',
+          ...transactionData
+        })
+      });
+      const res = await response.json();
+      if (res.status !== 'success') throw new Error(res.message);
+      return res;
+    }
+
+    function simulateLocalTransaction(data) {
+      const student = appState.siswa.find(s => s.nisn === data.nisn);
+      if (!student) throw new Error('Siswa tidak ditemukan.');
+      const current = Number(student.saldo) || 0;
+      const amount = Number(data.jumlah);
+      if (data.jenis === 'TARIK' && current < amount) {
+        throw new Error('Saldo siswa tidak mencukupi untuk penarikan ini.');
+      }
+      const newBal = (data.jenis === 'SETOR') ? (current + amount) : (current - amount);
+      student.saldo = newBal;
+      const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 19);
+      student.terakhirUpdate = nowStr;
+
+      const newTrx = {
+        id: `TRX-${Date.now().toString().slice(-8)}`,
+        tanggal: nowStr,
+        nisn: student.nisn,
+        nama: student.nama,
+        kelas: student.kelas,
+        jenis: data.jenis,
+        jumlah: amount,
+        keterangan: data.keterangan || '-',
+        petugas: data.petugas || 'Admin'
+      };
+      appState.transaksi.unshift(newTrx);
+      calculateSummaryFromLocal();
+      renderAllViews();
+      return { status: 'success', message: 'Transaksi berhasil (Simulasi)', data: newTrx };
+    }
+
+    async function sendStudentToBackend(studentData) {
+      if (!appState.gasUrl) {
+        appState.siswa.push({ ...studentData, saldo: 0, terakhirUpdate: '-' });
+        calculateSummaryFromLocal();
+        renderAllViews();
+        return { status: 'success', message: 'Siswa berhasil ditambahkan' };
+      }
+      const response = await fetch(appState.gasUrl, {
+        method: 'POST',
+        redirect: 'follow',
+        body: JSON.stringify({ action: 'addStudent', ...studentData })
+      });
+      const res = await response.json();
+      if (res.status !== 'success') throw new Error(res.message);
+      return res;
+    }
+
+    function renderAllViews() {
+      document.getElementById('stat-total-saldo').textContent = formatRupiah(appState.summary.totalSaldo);
+      document.getElementById('stat-total-setor').textContent = formatRupiah(appState.summary.totalSetoran);
+      document.getElementById('stat-total-tarik').textContent = formatRupiah(appState.summary.totalPenarikan);
+      document.getElementById('stat-total-siswa').textContent = `${appState.summary.totalSiswa} Siswa`;
+      document.getElementById('stat-total-trx').textContent = `${appState.summary.totalTransaksi} Transaksi`;
+      renderTransactionsTable();
+      renderSiswaTable();
+      populateStudentDropdowns();
+    }
+
+    function renderTransactionsTable() {
+      const tbody = document.getElementById('trx-table-body');
+      const emptyState = document.getElementById('trx-empty-state');
+      const search = (document.getElementById('trx-search-input').value || '').toLowerCase();
+      const filterType = document.getElementById('trx-filter-type').value;
+
+      const filtered = appState.transaksi.filter(item => {
+        const matchSearch = item.id.toLowerCase().includes(search) || item.nama.toLowerCase().includes(search) || item.nisn.toLowerCase().includes(search);
+        const matchType = (filterType === 'ALL') ? true : (item.jenis === filterType);
+        return matchSearch && matchType;
+      });
+
+      tbody.innerHTML = '';
+      if (filtered.length === 0) {
+        emptyState.classList.remove('hidden');
+        return;
+      }
+      emptyState.classList.add('hidden');
+
+      filtered.forEach(trx => {
+        const isSetor = trx.jenis === 'SETOR';
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-50 transition-colors';
+        tr.innerHTML = `
+          <td class="py-3 px-3"><span class="font-mono text-xs font-semibold block">${trx.id}</span><span class="text-[11px] text-slate-400">${trx.tanggal}</span></td>
+          <td class="py-3 px-3"><span class="font-semibold block">${trx.nama}</span><span class="text-xs font-mono text-slate-500">${trx.nisn}</span></td>
+          <td class="py-3 px-3"><span class="text-xs font-medium bg-slate-100 px-2 py-0.5 rounded">${trx.kelas}</span></td>
+          <td class="py-3 px-3"><span class="px-2 py-0.5 rounded text-xs font-bold ${isSetor ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}">${trx.jenis}</span></td>
+          <td class="py-3 px-3 text-right font-mono font-bold ${isSetor ? 'text-emerald-600' : 'text-rose-600'}">${isSetor ? '+' : '-'}${formatRupiah(trx.jumlah)}</td>
+          <td class="py-3 px-3 text-xs text-slate-600">${trx.keterangan || '-'}</td>
+          <td class="py-3 px-3 text-center">
+            <button onclick="openReceiptModal('${trx.id}')" class="p-1.5 text-slate-500 hover:text-emerald-600 transition"><i class="fa-solid fa-print"></i></button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function renderSiswaTable() {
+      const tbody = document.getElementById('siswa-table-body');
+      const emptyState = document.getElementById('siswa-empty-state');
+      const search = (document.getElementById('siswa-search-input').value || '').toLowerCase();
+      const classFilter = document.getElementById('siswa-class-filter').value;
+
+      const filtered = appState.siswa.filter(s => {
+        const matchSearch = s.nisn.includes(search) || s.nama.toLowerCase().includes(search);
+        const matchClass = (classFilter === 'ALL') ? true : (s.kelas === classFilter);
+        return matchSearch && matchClass;
+      });
+
+      tbody.innerHTML = '';
+      if (filtered.length === 0) {
+        emptyState.classList.remove('hidden');
+        return;
+      }
+      emptyState.classList.add('hidden');
+
+      filtered.forEach(s => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-50 transition-colors';
+        tr.innerHTML = `
+          <td class="py-3 px-3 font-mono text-xs font-semibold">${s.nisn}</td>
+          <td class="py-3 px-3 font-semibold">${s.nama}</td>
+          <td class="py-3 px-3"><span class="text-xs bg-slate-100 px-2 py-0.5 rounded">${s.kelas}</span></td>
+          <td class="py-3 px-3 text-right font-mono font-bold">${formatRupiah(s.saldo)}</td>
+          <td class="py-3 px-3 text-xs text-slate-400">${s.terakhirUpdate || '-'}</td>
+          <td class="py-3 px-3 text-center space-x-1">
+            <button onclick="quickActionStudent('${s.nisn}', 'SETOR')" class="px-2 py-1 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded">+ Setor</button>
+            <button onclick="quickActionStudent('${s.nisn}', 'TARIK')" class="px-2 py-1 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 rounded">- Tarik</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function populateStudentDropdowns() {
+      const options = ['<option value="">-- Pilih Siswa --</option>']
+        .concat(appState.siswa.map(s => `<option value="${s.nisn}">${s.nama} (${s.kelas}) - Saldo: ${formatRupiah(s.saldo)}</option>`))
+        .join('');
+      document.getElementById('tx-student-select').innerHTML = options;
+      document.getElementById('modal-tx-student').innerHTML = options;
+    }
+
+    function onStudentSelectChanged() {
+      const nisn = document.getElementById('tx-student-select').value;
+      const card = document.getElementById('tx-student-balance-card');
+      if (!nisn) { card.classList.add('hidden'); return; }
+      const s = appState.siswa.find(i => i.nisn === nisn);
+      if (s) {
+        card.classList.remove('hidden');
+        document.getElementById('tx-selected-name').textContent = s.nama;
+        document.getElementById('tx-selected-class').textContent = s.kelas;
+        document.getElementById('tx-selected-balance').textContent = formatRupiah(s.saldo);
+        calculateProjectedBalance();
+      }
+    }
+
+    function calculateProjectedBalance() {
+      const nisn = document.getElementById('tx-student-select').value;
+      const amt = Number(document.getElementById('tx-amount').value) || 0;
+      const box = document.getElementById('tx-projected-container');
+      const text = document.getElementById('tx-projected-balance');
+      if (!nisn || amt <= 0) { box.classList.add('hidden'); return; }
+      const s = appState.siswa.find(i => i.nisn === nisn);
+      if (!s) return;
+      const jenis = document.querySelector('input[name="tx-type"]:checked').value;
+      const projected = (jenis === 'SETOR') ? (Number(s.saldo) + amt) : (Number(s.saldo) - amt);
+      box.classList.remove('hidden');
+      text.textContent = formatRupiah(projected);
+      text.className = projected < 0 ? 'text-sm font-mono text-rose-600 font-bold' : 'text-sm font-mono text-emerald-800 font-bold';
+    }
+
+    function setNominal(v) {
+      document.getElementById('tx-amount').value = v;
+      calculateProjectedBalance();
+    }
+
+    function updateTxTypeStyle() {
+      const jenis = document.querySelector('input[name="tx-type"]:checked').value;
+      document.getElementById('tx-type-setor-label').className = (jenis === 'SETOR')
+        ? 'cursor-pointer border-2 border-emerald-600 bg-emerald-50 rounded-xl p-3 flex items-center justify-center gap-2'
+        : 'cursor-pointer border-2 border-slate-200 bg-white rounded-xl p-3 flex items-center justify-center gap-2';
+      document.getElementById('tx-type-tarik-label').className = (jenis === 'TARIK')
+        ? 'cursor-pointer border-2 border-rose-600 bg-rose-50 rounded-xl p-3 flex items-center justify-center gap-2'
+        : 'cursor-pointer border-2 border-slate-200 bg-white rounded-xl p-3 flex items-center justify-center gap-2';
+      calculateProjectedBalance();
+    }
+
+    async function submitTransactionForm(e) {
+      e.preventDefault();
+      const nisn = document.getElementById('tx-student-select').value;
+      const jenis = document.querySelector('input[name="tx-type"]:checked').value;
+      const jumlah = Number(document.getElementById('tx-amount').value);
+      const keterangan = document.getElementById('tx-note').value;
+      const petugas = document.getElementById('tx-officer').value;
+      const btn = document.getElementById('tx-submit-btn');
+
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Memproses...';
+      try {
+        const res = await sendTransactionToBackend({ nisn, jenis, jumlah, keterangan, petugas });
+        showToast(res.message, 'success');
+        document.getElementById('tx-amount').value = '';
+        document.getElementById('tx-note').value = '';
+        onStudentSelectChanged();
+        if (appState.gasUrl) await fetchDataFromBackend();
+        if (res.data && res.data.id) openReceiptModal(res.data.id);
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Simpan &amp; Proses Transaksi';
+      }
+    }
+
+    async function submitModalTransaction(e) {
+      e.preventDefault();
+      const nisn = document.getElementById('modal-tx-student').value;
+      const jenis = document.querySelector('input[name="modal-tx-type"]:checked').value;
+      const jumlah = Number(document.getElementById('modal-tx-amount').value);
+      const keterangan = document.getElementById('modal-tx-note').value;
+      const btn = document.getElementById('modal-tx-submit');
+
+      btn.disabled = true;
+      btn.textContent = 'Memproses...';
+      try {
+        const res = await sendTransactionToBackend({ nisn, jenis, jumlah, keterangan, petugas: 'Admin' });
+        showToast(res.message, 'success');
+        closeModal('modal-transaction');
+        if (appState.gasUrl) await fetchDataFromBackend();
+        if (res.data && res.data.id) openReceiptModal(res.data.id);
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Simpan Transaksi';
+      }
+    }
+
+    async function submitAddStudent(e) {
+      e.preventDefault();
+      const nisn = document.getElementById('new-student-nisn').value.trim();
+      const nama = document.getElementById('new-student-nama').value.trim();
+      const kelas = document.getElementById('new-student-kelas').value.trim();
+      const btn = document.getElementById('new-student-submit');
+
+      btn.disabled = true;
+      btn.textContent = 'Mendaftarkan...';
+      try {
+        const res = await sendStudentToBackend({ nisn, nama, kelas });
+        showToast(res.message, 'success');
+        closeModal('modal-add-student');
+        document.getElementById('new-student-nisn').value = '';
+        document.getElementById('new-student-nama').value = '';
+        document.getElementById('new-student-kelas').value = '';
+        if (appState.gasUrl) await fetchDataFromBackend();
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Daftarkan';
+      }
+    }
+
+    function quickActionStudent(nisn, defaultJenis) {
+      openModal('modal-transaction');
+      document.getElementById('modal-tx-student').value = nisn;
+      onModalStudentChange();
+      const radios = document.getElementsByName('modal-tx-type');
+      radios.forEach(r => r.checked = (r.value === defaultJenis));
+    }
+
+    function onModalStudentChange() {
+      const nisn = document.getElementById('modal-tx-student').value;
+      const s = appState.siswa.find(i => i.nisn === nisn);
+      document.getElementById('modal-tx-balance-display').textContent = s ? `Saldo sekarang: ${formatRupiah(s.saldo)}` : '';
+    }
+
+    function openReceiptModal(id) {
+      const trx = appState.transaksi.find(t => t.id === id);
+      if (!trx) return;
+      document.getElementById('rcp-id').textContent = trx.id;
+      document.getElementById('rcp-time').textContent = trx.tanggal;
+      document.getElementById('rcp-student').textContent = `${trx.nama} (${trx.nisn})`;
+      document.getElementById('rcp-class').textContent = trx.kelas;
+      document.getElementById('rcp-type').textContent = trx.jenis === 'SETOR' ? 'SETOR TUNAI' : 'TARIK TUNAI';
+      document.getElementById('rcp-type').className = trx.jenis === 'SETOR' ? 'font-bold text-emerald-700' : 'font-bold text-rose-700';
+      document.getElementById('rcp-amount').textContent = formatRupiah(trx.jumlah);
+      document.getElementById('rcp-note').textContent = trx.keterangan || '-';
+      document.getElementById('rcp-officer').textContent = trx.petugas || 'Admin';
+      openModal('modal-receipt');
+    }
+
+    async function saveGasUrl() {
+      const url = document.getElementById('gas-url-input').value.trim();
+      const box = document.getElementById('gas-test-result');
+      if (!url) { showToast('Masukkan URL Google Apps Script', 'error'); return; }
+
+      box.classList.remove('hidden');
+      box.className = 'p-4 rounded-xl text-xs bg-amber-50 text-amber-800 border border-amber-200';
+      box.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Menguji koneksi ke endpoint Google Sheets...';
+
+      try {
+        const response = await fetch(`${url}?action=getAll`, { method: 'GET', redirect: 'follow' });
+        const json = await response.json();
+        if (json.status === 'success') {
+          localStorage.setItem(CONFIG.gasEndpointKey, url);
+          appState.gasUrl = url;
+          box.className = 'p-4 rounded-xl text-xs bg-emerald-50 text-emerald-800 border border-emerald-200';
+          box.innerHTML = '<strong><i class="fa-solid fa-circle-check text-emerald-600 mr-1"></i> Koneksi Berhasil!</strong> URL tersimpan.';
+          updateConnectionBadge(true);
+          await fetchDataFromBackend();
+        } else {
+          throw new Error(json.message);
+        }
+      } catch (err) {
+        box.className = 'p-4 rounded-xl text-xs bg-rose-50 text-rose-800 border border-rose-200';
+        box.innerHTML = `<strong>Koneksi Gagal:</strong> ${err.message}. Pastikan deployment diatur ke "Anyone".`;
+      }
+    }
+
+    function resetToLocalDemo() {
+      localStorage.removeItem(CONFIG.gasEndpointKey);
+      appState.gasUrl = '';
+      document.getElementById('gas-url-input').value = '';
+      document.getElementById('gas-test-result').classList.add('hidden');
+      loadMockData();
+      updateConnectionBadge(false);
+      showToast('Beralih ke mode offline.', 'info');
+    }
+
+    function exportTransactionsCSV() {
+      if (appState.transaksi.length === 0) { showToast('Tidak ada data transaksi', 'info'); return; }
+      let csv = 'ID Transaksi,Tanggal,NISN,Nama Siswa,Kelas,Jenis,Nominal,Keterangan,Petugas\n';
+      appState.transaksi.forEach(t => {
+        csv += `"${t.id}","${t.tanggal}","${t.nisn}","${t.nama}","${t.kelas}","${t.jenis}",${t.jumlah},"${(t.keterangan || '').replace(/"/g, '""')}","${t.petugas}"\n`;
+      });
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `rekap_tabungan_${new Date().toISOString().substring(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function setActiveTab(tabId) {
+      document.querySelectorAll('.tab-pane').forEach(el => el.classList.add('hidden'));
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.className = 'tab-btn px-4 py-2 font-medium rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 whitespace-nowrap transition');
+      const p = document.getElementById(`tab-content-${tabId}`);
+      const b = document.getElementById(`tab-btn-${tabId}`);
+      if (p) p.classList.remove('hidden');
+      if (b) b.className = 'tab-btn px-4 py-2 font-medium rounded-lg text-emerald-700 bg-emerald-50 whitespace-nowrap transition';
+    }
+
+    function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
+    function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+    function updateConnectionBadge(connected, isError = false) {
+      const badge = document.getElementById('connection-status-badge');
+      const notice = document.getElementById('gas-notice');
+      if (connected) {
+        badge.className = 'px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1.5';
+        badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-500"></span><span>Google Sheets Live</span>';
+        if (notice) notice.classList.add('hidden');
+      } else if (isError) {
+        badge.className = 'px-2.5 py-1 rounded-full text-xs font-medium bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-1.5';
+        badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-rose-500"></span><span>Koneksi Gagal</span>';
+      } else {
+        badge.className = 'px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1.5';
+        badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-amber-500"></span><span>Mode Simulasi Lokal</span>';
+        if (notice) notice.classList.remove('hidden');
+      }
+    }
+
+    function setLoading(l) {
+      const icon = document.getElementById('sync-icon');
+      if (icon) {
+        if (l) icon.classList.add('fa-spin');
+        else icon.classList.remove('fa-spin');
+      }
+    }
+
+    function showToast(msg, type = 'info') {
+      const t = document.getElementById('toast');
+      document.getElementById('toast-message').textContent = msg;
+      const i = document.getElementById('toast-icon');
+      i.className = type === 'error' ? 'fa-solid fa-triangle-exclamation text-rose-400' : 'fa-solid fa-circle-check text-emerald-400';
+      t.classList.remove('translate-y-20', 'opacity-0');
+      t.classList.add('translate-y-0', 'opacity-100');
+      setTimeout(() => {
+        t.classList.remove('translate-y-0', 'opacity-100');
+        t.classList.add('translate-y-20', 'opacity-0');
+      }, 3500);
+    }
+
+    function formatRupiah(num) {
+      return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(Number(num) || 0);
+    }
+  </script>
+</body>
+</html>
